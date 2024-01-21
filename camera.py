@@ -1,7 +1,9 @@
 import numpy as np
 from rotations import rpy
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Sequence
+from functools import lru_cache
+from itertools import product
 
 def intrinsics(f, cx, cy):
     return np.array([[f, 0, cx],
@@ -23,6 +25,7 @@ class Camera(BaseModel):
     roll: float = 0.0
     pitch: float = 0.0
     yaw: float = 0.0
+    ray_dir: Sequence = None
     
     @property
     def cx(self):
@@ -59,7 +62,29 @@ class Camera(BaseModel):
     @property
     def origin(self):
         return self.t
+    
+    def compute_rays(self):
+        
+        if self.ray_dir is not None:
+            return self.ray_dir
+        
+        rays = np.meshgrid(np.arange(self.w), np.arange(self.h))
+        rays = np.stack(rays, axis=0)
+        ones = np.ones_like(rays[0, :, :])
+        rays = np.stack([rays[1, :, :], rays[0, :, :], ones], axis=0)
 
+        print(rays[:, :3, :3])
+
+        print(rays.shape)
+        print(self.intrinsics.shape)
+        self.ray_dir = np.linalg.inv(self.intrinsics) @ rays
+        self.ray_dir = self.ray_dir / np.linalg.norm(self.ray_dir, axis=0, keepdims=True)
+
+        return self.ray_dir
+    
+    # @property
+    def rays(self):
+        return self.compute_rays()
 
 camera = Camera()
 print(camera)

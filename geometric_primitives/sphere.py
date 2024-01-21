@@ -50,3 +50,19 @@ class Sphere(BaseModel):
             return None, np.inf
         
         return spheres[min_sphere_idx], min_t
+    
+    @staticmethod
+    def genenerate_random_spheres(n: int, radius_range: Sequence, center_range: Sequence, color_range: Sequence):
+        spheres = []
+
+        for _ in range(n):
+            radius = np.random.uniform(*radius_range)
+            center = np.random.uniform(*center_range, size=3).tolist()
+            ambient = np.random.uniform(*color_range, size=3).tolist()
+            diffuse = np.random.uniform(*color_range, size=3).tolist()
+            specular = np.random.uniform(*color_range, size=3).tolist()
+            shininess = np.random.uniform(0, 1)
+
+            spheres.append(Sphere(radius=radius, center=center, ambient=ambient, diffuse=diffuse, specular=specular, shininess=shininess))
+
+        return spheres

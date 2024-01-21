@@ -5,6 +5,9 @@ from geometric_primitives.sphere import Sphere
 from camera import Camera
 from pprint import pprint
 from rotations import quaternion_to_rotation_matrix, rpy, slerp
+from itertools import product
+from functools import partial
+import cProfile
 import random
 
 from time import time
@@ -14,44 +17,18 @@ np.set_printoptions(precision=2)
 np.set_printoptions(suppress=True)
 
 # define a bunch of spheres
-spheres = []
-for _ in range(5):  # create 5 random spheres
-    
-    center = np.random.rand(3) * 2  # random center coordinates in the range [0, 10)
-    radius = random.uniform(0.5, 1.5)  # random radius in the range [0.5, 1.5)
-    ambient = np.random.rand(3)  # random ambient color
-    
-    diffuse = np.random.rand(3)  # random diffuse color
-    specular = np.random.rand(3)  # random specular color
-    shininess = random.uniform(0, 1)  # random shininess in the range [0, 1)
-
-    sphere_data = {
-        "radius": radius,
-        "center": center.tolist(),
-        "ambient": ambient.tolist(),
-        "diffuse": diffuse.tolist(),
-        "specular": specular.tolist(),
-        "shininess": shininess
-    }
-
-    spheres.append(Sphere(**sphere_data))
+spheres = Sphere.genenerate_random_spheres(2, (0.5, 1.0), (-0.5, 0.5), (0.0, 1.0))
 
 # define a bunch of lights
-lights = []
-lights.append((np.array([1, 1, 0]), 1.0))
+light = {"position": np.array([0, 0, -3]), "ambient": np.array([0.5, 0.5, 0.5])}
 camera = Camera()
 
 inv_intrinsics = np.linalg.inv(camera.intrinsics)
 
 imgs = []
-
-# move the camera 
-# linear interpolate based on a quaterion 
-
 q0 = np.r_[(0, 0, 1, 0)]
 q1 = np.r_[(0, 0, 0, 1)]
 
-# 
 q = slerp(q0, q1, 0.5)
 
 R = quaternion_to_rotation_matrix(q)
@@ -61,20 +38,37 @@ img = np.zeros((camera.h, camera.w, 3))
 
 time0 = time()
 
-for i, y in enumerate(range(camera.h)):
+def normalize(v):
+    return v / np.linalg.norm(v)
 
-    for j, x in enumerate(range(camera.w)):
+def color_pixel(i, j, camera, spheres):
+    ray_dir = camera.rays()[i, j]
+    
+    (sphere, dist) = Sphere.nearest_intersection_object(spheres, camera.origin, ray_dir)
 
-        pix = np.array([x, y, 1])
-        ray_dir = inv_intrinsics @ pix
-        ray_dir = ray_dir / np.linalg.norm(ray_dir)
-        
-        (sphere, dist) = Sphere.nearest_intersection_object(spheres, camera.origin, ray_dir)
+    if dist == np.inf:
+        return np.array([0., 0., 0.])
 
-        if dist == np.inf:
-            continue
+    intersection = camera.origin + dist * ray_dir
+    surface_normal = normalize(intersection - sphere.center)
+    shifted_point = intersection + 1e-5 * surface_normal
+    intersection_to_light = normalize(light["position"] - shifted_point)
 
-        img[i, j] = sphere.ambient
+    _, min_dist = Sphere.nearest_intersection_object(spheres, shifted_point, intersection_to_light)
+    intersection_to_light_distance = np.linalg.norm(light['position'] - intersection)
+    is_shadowed = min_dist < intersection_to_light_distance
+
+    if is_shadowed:
+        return np.array([0., 0., 0.])
+    
+    illumination = np.r_[0., 0., 0.]
+    illumination += sphere.ambient * light["ambient"]
+
+    return sphere.ambient
+
+p_color_pixel = partial(color_pixel, camera=camera, spheres=spheres)
+for i, j in product(range(camera.h), range(camera.w)):
+    img[i, j] = p_color_pixel(i, j)
 
 time1 = time()
 print("time elapsed: ", time1 - time0)
