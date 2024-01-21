@@ -68,16 +68,14 @@ class Camera(BaseModel):
         if self.ray_dir is not None:
             return self.ray_dir
         
-        rays = np.meshgrid(np.arange(self.w), np.arange(self.h))
-        rays = np.stack(rays, axis=0)
-        ones = np.ones_like(rays[0, :, :])
-        rays = np.stack([rays[1, :, :], rays[0, :, :], ones], axis=0)
-
-        print(rays[:, :3, :3])
-
-        print(rays.shape)
-        print(self.intrinsics.shape)
+        xx, yy = np.meshgrid(np.arange(self.w), np.arange(self.h))
+        ones = np.ones_like(xx)
+        rays = np.stack([yy, xx, ones], axis=0)
+        # flatten
+        rays = rays.reshape(3, self.h * self.w)
         self.ray_dir = np.linalg.inv(self.intrinsics) @ rays
+        # unflatten
+        self.ray_dir = self.ray_dir.reshape(3, self.h, self.w)
         self.ray_dir = self.ray_dir / np.linalg.norm(self.ray_dir, axis=0, keepdims=True)
 
         return self.ray_dir
